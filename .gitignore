@@ -140,3 +140,8 @@ dist
 # aws-cdk
 .cdk.staging
 cdk.out
+
+# Environment variables
+.env
+.env.local
+.env.production
