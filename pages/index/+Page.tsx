@@ -18,12 +18,24 @@ export default function Page() {
           </ul>
         </div>
         
-        <div className="flex space-x-4">
+        <div className="flex flex-wrap gap-4">
           <a 
             href="/game" 
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
-            🎮 Play Demo Game
+            🎮 Static Demo Game
+          </a>
+          <a 
+            href="/interactive-game" 
+            className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
+          >
+            🎯 Interactive Game (Phase 2)
+          </a>
+          <a 
+            href="/multiplayer" 
+            className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            👥 Multiplayer Lobby (Phase 3)
           </a>
           <a 
             href="/todo" 
@@ -33,13 +45,27 @@ export default function Page() {
           </a>
         </div>
         
-        <div className="bg-yellow-50 p-4 rounded-lg">
-          <h2 className="font-semibold text-lg mb-2">🚀 Coming Next (Phase 2):</h2>
+        <div className="bg-green-50 p-4 rounded-lg">
+          <h2 className="font-semibold text-lg mb-2">✅ Phase 2 Completed - Interactive Gameplay:</h2>
           <ul className="list-disc list-inside space-y-1 text-sm">
-            <li>Interactive drag-and-drop tile placement</li>
-            <li>Real-time game logic and validation</li>
-            <li>Complete single-player Scrabble functionality</li>
-            <li>AI opponent integration</li>
+            <li>✅ Drag-and-drop tile placement with visual feedback</li>
+            <li>✅ Real-time move validation and error display</li>
+            <li>✅ Interactive game controls (submit, pass, exchange, recall)</li>
+            <li>✅ Move preview and live score calculation</li>
+            <li>✅ Enhanced visual design with border merging</li>
+            <li>✅ Tile rack with draggable tiles and controls</li>
+          </ul>
+        </div>
+        
+        <div className="bg-yellow-50 p-4 rounded-lg">
+          <h2 className="font-semibold text-lg mb-2">🚀 Phase 3 - Multiplayer Real-time (In Progress):</h2>
+          <ul className="list-disc list-inside space-y-1 text-sm">
+            <li>🔄 WebSocket integration for real-time communication</li>
+            <li>🔄 Game room creation and management</li>
+            <li>🔄 Turn synchronization between players</li>
+            <li>🔄 Live move broadcasting to all players</li>
+            <li>🔄 Player presence and connection status</li>
+            <li>🔄 Multiplayer lobby with room listing</li>
           </ul>
         </div>
       </div>

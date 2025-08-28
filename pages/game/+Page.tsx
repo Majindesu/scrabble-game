@@ -7,6 +7,16 @@ import { useData } from "vike-react/useData";
 
 export default function Page() {
   const data = useData<Data>();
+  if (!data || !data.game) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">Loading game...</h1>
+          <p className="text-gray-600">Please wait while we set up your Scrabble game.</p>
+        </div>
+      </div>
+    );
+  }
   const { game } = data;
 
   return (
