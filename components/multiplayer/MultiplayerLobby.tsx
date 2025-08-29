@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Users, Play, Plus, RefreshCw } from 'lucide-react';
+import { Loader2, Users, Play, Plus, RefreshCw, Eye } from 'lucide-react';
 import { useMultiplayerGame } from '../../lib/hooks/useMultiplayerGame';
 import { cn } from '../../lib/utils';
 
@@ -96,6 +96,7 @@ export function MultiplayerLobby({ onGameJoined }: MultiplayerLobbyProps) {
     availableRooms,
     createGame,
     joinGame,
+    spectateGame,
     requestRoomList,
     error,
     loading,
@@ -133,6 +134,15 @@ export function MultiplayerLobby({ onGameJoined }: MultiplayerLobbyProps) {
     }
     
     joinGame(gameId, playerName.trim());
+    setSelectedGameId(gameId);
+  };
+
+  const handleSpectateGame = (gameId: string) => {
+    if (!playerName.trim()) {
+      return;
+    }
+    
+    spectateGame(gameId, `${playerName.trim()} (Spectator)`);
     setSelectedGameId(gameId);
   };
 
@@ -282,25 +292,51 @@ export function MultiplayerLobby({ onGameJoined }: MultiplayerLobbyProps) {
                         </div>
                       </div>
                       
-                      <Button
-                        onClick={() => handleJoinGame(room.id)}
-                        disabled={
-                          !playerName.trim() || 
-                          loading || 
-                          !isConnected ||
-                          (loading && selectedGameId === room.id)
-                        }
-                        size="sm"
-                      >
-                        {(loading && selectedGameId === room.id) ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Play className="w-4 h-4 mr-1" />
-                            Join
-                          </>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleJoinGame(room.id)}
+                          disabled={
+                            !playerName.trim() || 
+                            loading || 
+                            !isConnected ||
+                            (loading && selectedGameId === room.id) ||
+                            room.playerCount >= room.maxPlayers
+                          }
+                          size="sm"
+                        >
+                          {(loading && selectedGameId === room.id) ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Play className="w-4 h-4 mr-1" />
+                              {room.playerCount >= room.maxPlayers ? 'Full' : 'Join'}
+                            </>
+                          )}
+                        </Button>
+                        
+                        {room.gameStatus === 'active' && (
+                          <Button
+                            onClick={() => handleSpectateGame(room.id)}
+                            disabled={
+                              !playerName.trim() || 
+                              loading || 
+                              !isConnected ||
+                              (loading && selectedGameId === room.id)
+                            }
+                            variant="outline"
+                            size="sm"
+                          >
+                            {(loading && selectedGameId === room.id) ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Eye className="w-4 h-4 mr-1" />
+                                Watch
+                              </>
+                            )}
+                          </Button>
                         )}
-                      </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

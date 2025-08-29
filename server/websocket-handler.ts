@@ -11,11 +11,13 @@ export interface Player {
   tiles: Array<{ letter: string; points: number }>;
   isConnected: boolean;
   lastSeen: Date;
+  reconnectToken?: string; // For reconnection
 }
 
 export interface MultiplayerGame {
   id: string;
   players: Player[];
+  spectators: Array<{ id: string; name: string }>;
   currentPlayerIndex: number;
   board: any[][]; // BoardCell[][]
   tilesBag: Array<{ letter: string; points: number }>;
@@ -28,13 +30,15 @@ export interface MultiplayerGame {
 // In-memory game storage (in production, use Redis or database)
 const games = new Map<string, MultiplayerGame>();
 const playerToGame = new Map<string, string>(); // playerId -> gameId
+const reconnectTokens = new Map<string, { playerId: string; gameId: string; playerName: string }>(); // token -> player info
 
 // WebSocket event types
 export interface ServerToClientEvents {
-  'game:joined': (data: { game: MultiplayerGame; playerId: string }) => void;
+  'game:joined': (data: { game: MultiplayerGame; playerId: string; reconnectToken: string }) => void;
   'game:updated': (game: MultiplayerGame) => void;
   'game:player-joined': (player: Player) => void;
   'game:player-left': (playerId: string) => void;
+  'game:player-reconnected': (player: Player) => void;
   'game:turn-changed': (data: { currentPlayerIndex: number; currentPlayer: Player }) => void;
   'game:move-made': (data: { 
     playerId: string; 
@@ -43,12 +47,16 @@ export interface ServerToClientEvents {
     newScores: { [playerId: string]: number };
   }) => void;
   'game:error': (error: string) => void;
+  'game:spectator-joined': (spectator: { id: string; name: string }) => void;
+  'game:spectator-left': (spectatorId: string) => void;
   'room:list': (rooms: Array<{ id: string; playerCount: number; maxPlayers: number; gameStatus: string }>) => void;
 }
 
 export interface ClientToServerEvents {
   'game:create': (data: { playerName: string; maxPlayers?: number }) => void;
   'game:join': (data: { gameId: string; playerName: string }) => void;
+  'game:spectate': (data: { gameId: string; spectatorName: string }) => void;
+  'game:reconnect': (data: { reconnectToken: string }) => void;
   'game:leave': () => void;
   'game:make-move': (data: { move: any; newBoard: any[][] }) => void;
   'game:pass-turn': () => void;
@@ -85,6 +93,7 @@ export function setupWebSocket(server: Server) {
         const newGame: MultiplayerGame = {
           id: gameId,
           players: [newPlayer],
+          spectators: [],
           currentPlayerIndex: 0,
           board: initializeEmptyBoard(),
           tilesBag: initializeTileBag(),
@@ -97,11 +106,16 @@ export function setupWebSocket(server: Server) {
         // Deal starting tiles to the player
         dealStartingTiles(newGame, newPlayer);
 
+        // Generate reconnect token
+        const reconnectToken = uuidv4();
+        newPlayer.reconnectToken = reconnectToken;
+        reconnectTokens.set(reconnectToken, { playerId, gameId, playerName });
+
         games.set(gameId, newGame);
         playerToGame.set(playerId, gameId);
         
         socket.join(gameId);
-        socket.emit('game:joined', { game: newGame, playerId });
+        socket.emit('game:joined', { game: newGame, playerId, reconnectToken });
         
         console.log(`Game created: ${gameId} by ${playerName}`);
       } catch (error) {
@@ -143,6 +157,11 @@ export function setupWebSocket(server: Server) {
         // Deal starting tiles
         dealStartingTiles(game, newPlayer);
         
+        // Generate reconnect token
+        const reconnectToken = uuidv4();
+        newPlayer.reconnectToken = reconnectToken;
+        reconnectTokens.set(reconnectToken, { playerId, gameId, playerName });
+
         game.players.push(newPlayer);
         game.lastActivity = new Date();
 
@@ -158,12 +177,106 @@ export function setupWebSocket(server: Server) {
         io.to(gameId).emit('game:player-joined', newPlayer);
         io.to(gameId).emit('game:updated', game);
         
-        socket.emit('game:joined', { game, playerId });
+        socket.emit('game:joined', { game, playerId, reconnectToken });
         
         console.log(`Player ${playerName} joined game: ${gameId}`);
       } catch (error) {
         socket.emit('game:error', 'Failed to join game');
         console.error('Error joining game:', error);
+      }
+    });
+
+    // Spectate a game
+    socket.on('game:spectate', ({ gameId, spectatorName }) => {
+      try {
+        const game = games.get(gameId);
+        if (!game) {
+          socket.emit('game:error', 'Game not found');
+          return;
+        }
+
+        // Check if already spectating
+        const existingSpectator = game.spectators.find(s => s.id === socket.id);
+        if (existingSpectator) {
+          socket.emit('game:error', 'Already spectating this game');
+          return;
+        }
+
+        const spectator = { id: socket.id, name: spectatorName };
+        game.spectators.push(spectator);
+        game.lastActivity = new Date();
+
+        // Join the game room for real-time updates
+        socket.join(gameId);
+
+        // Notify the spectator they've joined (spectators don't get reconnect tokens)
+        socket.emit('game:joined', { game, playerId: socket.id, reconnectToken: '' });
+
+        // Notify all players and spectators about the new spectator
+        socket.to(gameId).emit('game:spectator-joined', spectator);
+
+        console.log(`${spectatorName} is now spectating game: ${gameId}`);
+      } catch (error) {
+        socket.emit('game:error', 'Failed to spectate game');
+        console.error('Error spectating game:', error);
+      }
+    });
+
+    // Reconnect to a game
+    socket.on('game:reconnect', ({ reconnectToken }) => {
+      try {
+        const reconnectInfo = reconnectTokens.get(reconnectToken);
+        if (!reconnectInfo) {
+          socket.emit('game:error', 'Invalid reconnect token');
+          return;
+        }
+
+        const { playerId: originalPlayerId, gameId, playerName } = reconnectInfo;
+        const game = games.get(gameId);
+
+        if (!game) {
+          socket.emit('game:error', 'Game no longer exists');
+          reconnectTokens.delete(reconnectToken);
+          return;
+        }
+
+        const player = game.players.find(p => p.id === originalPlayerId);
+        if (!player) {
+          socket.emit('game:error', 'Player not found in game');
+          reconnectTokens.delete(reconnectToken);
+          return;
+        }
+
+        // Update player connection info
+        const oldSocketId = player.id;
+        player.id = socket.id; // Update to new socket ID
+        player.isConnected = true;
+        player.lastSeen = new Date();
+
+        // Update mappings
+        playerToGame.delete(oldSocketId);
+        playerToGame.set(socket.id, gameId);
+
+        // Update reconnect token mapping
+        reconnectTokens.delete(reconnectToken);
+        const newReconnectToken = uuidv4();
+        player.reconnectToken = newReconnectToken;
+        reconnectTokens.set(newReconnectToken, { playerId: socket.id, gameId, playerName });
+
+        // Join the game room
+        socket.join(gameId);
+
+        // Notify the player they've reconnected
+        socket.emit('game:joined', { game, playerId: socket.id, reconnectToken: newReconnectToken });
+
+        // Notify other players about the reconnection
+        socket.to(gameId).emit('game:player-reconnected', player);
+        socket.to(gameId).emit('game:updated', game);
+
+        console.log(`Player ${playerName} reconnected to game: ${gameId}`);
+      } catch (error) {
+        socket.emit('game:error', 'Failed to reconnect to game');
+        console.error('Error reconnecting to game:', error);
       }
     });
 
@@ -286,6 +399,7 @@ export function setupWebSocket(server: Server) {
       if (gameId) {
         const game = games.get(gameId);
         if (game) {
+          // Check if disconnecting user was a player
           const player = game.players.find(p => p.id === socket.id);
           if (player) {
             player.isConnected = false;
@@ -297,6 +411,19 @@ export function setupWebSocket(server: Server) {
             
             // Clean up empty games after a delay
             setTimeout(() => cleanupGame(gameId), 30000); // 30 seconds
+          } else {
+            // Check if disconnecting user was a spectator
+            const spectatorIndex = game.spectators.findIndex(s => s.id === socket.id);
+            if (spectatorIndex !== -1) {
+              const spectator = game.spectators[spectatorIndex];
+              game.spectators.splice(spectatorIndex, 1);
+              
+              // Notify remaining players and spectators
+              socket.to(gameId).emit('game:spectator-left', socket.id);
+              socket.to(gameId).emit('game:updated', game);
+              
+              console.log(`Spectator ${spectator.name} left game: ${gameId}`);
+            }
           }
         }
         

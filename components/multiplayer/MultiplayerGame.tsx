@@ -30,6 +30,10 @@ export function MultiplayerGame() {
   const [currentMoveErrors, setCurrentMoveErrors] = useState<MoveError[]>([]);
   const [currentMoveScore, setCurrentMoveScore] = useState(0);
 
+  // Check if current user is a spectator
+  const isSpectator = game && !game.players.some(p => p.id === currentPlayer?.id);
+  const spectators = game?.spectators || [];
+
   // Redirect to lobby if not in a game
   useEffect(() => {
     if (!game) {
@@ -145,7 +149,7 @@ export function MultiplayerGame() {
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
             <Users className="w-8 h-8" />
-            Multiplayer Scrabble
+            Multiplayer Scrabble {isSpectator && <span className="text-lg font-normal text-blue-600">(Spectating)</span>}
           </h1>
           <div className="flex items-center justify-center gap-4 text-sm">
             <span className="flex items-center gap-1">
@@ -163,6 +167,9 @@ export function MultiplayerGame() {
             </span>
             <span>Game: #{game.id.slice(-6)}</span>
             <span>{game.players.length}/{game.maxPlayers} Players</span>
+            {spectators.length > 0 && (
+              <span className="text-blue-600">{spectators.length} Spectator{spectators.length !== 1 ? 's' : ''}</span>
+            )}
           </div>
         </div>
 
@@ -230,23 +237,42 @@ export function MultiplayerGame() {
             </div>
 
             {/* Game controls */}
-            <GameControls
-              onSubmitMove={handleSubmitMove}
-              onPassTurn={handlePassTurn}
-              onExchangeTiles={handleExchangeTilesAction}
-              onRecallTiles={handleRecallTiles}
-              canSubmit={isMyTurn && currentMoveErrors.length === 0}
-            />
+            {/* Game Controls - Only show for players */}
+            {!isSpectator && (
+              <GameControls
+                onSubmitMove={handleSubmitMove}
+                onPassTurn={handlePassTurn}
+                onExchangeTiles={handleExchangeTilesAction}
+                onRecallTiles={handleRecallTiles}
+                canSubmit={isMyTurn && currentMoveErrors.length === 0}
+              />
+            )}
+
+            {/* Spectator info */}
+            {isSpectator && spectators.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="font-semibold text-blue-900 mb-2">Spectators</h3>
+                <div className="space-y-1 text-sm">
+                  {spectators.map((spectator) => (
+                    <div key={spectator.id} className="text-blue-700">
+                      {spectator.name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Tile Rack */}
-        <div className="mt-6 flex justify-center">
-          <InteractiveTileRack
-            tiles={myTiles.map(tile => tile.letter)}
-            boardRef={boardRef}
-          />
-        </div>
+        {/* Tile Rack - Only show for players */}
+        {!isSpectator && (
+          <div className="mt-6 flex justify-center">
+            <InteractiveTileRack
+              tiles={myTiles.map(tile => tile.letter)}
+              boardRef={boardRef}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

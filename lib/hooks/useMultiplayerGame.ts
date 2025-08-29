@@ -23,6 +23,7 @@ interface UseMultiplayerGameResult {
   // Actions
   createGame: (playerName: string, maxPlayers?: number) => void;
   joinGame: (gameId: string, playerName: string) => void;
+  spectateGame: (gameId: string, spectatorName: string) => void;
   leaveGame: () => void;
   makeMove: (move: any, newBoard: any[][]) => void;
   passTurn: () => void;
@@ -47,7 +48,7 @@ export function useMultiplayerGame(): UseMultiplayerGameResult {
 
   // Initialize socket connection
   useEffect(() => {
-    const socketInstance = io('http://localhost:3002', {
+    const socketInstance = io('http://localhost:3000', {
       transports: ['websocket']
     });
 
@@ -139,6 +140,17 @@ export function useMultiplayerGame(): UseMultiplayerGameResult {
     socket.emit('game:join', { gameId, playerName });
   }, [socket, isConnected]);
 
+  const spectateGame = useCallback((gameId: string, spectatorName: string) => {
+    if (!socket || !isConnected) {
+      setError('Not connected to server');
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    socket.emit('game:spectate', { gameId, spectatorName });
+  }, [socket, isConnected]);
+
   const leaveGame = useCallback(() => {
     if (!socket) return;
     
@@ -205,6 +217,7 @@ export function useMultiplayerGame(): UseMultiplayerGameResult {
     availableRooms,
     createGame,
     joinGame,
+    spectateGame,
     leaveGame,
     makeMove,
     passTurn,
